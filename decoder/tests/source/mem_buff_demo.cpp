@@ -126,7 +126,6 @@ static int initDataBuffers()
     FILE *fp;
     std::string filename;
     long size;
-    size_t bytes_read;
 
     /* the file names to create the data buffers */
 #ifdef _WIN32
@@ -159,10 +158,8 @@ static int initDataBuffers()
         return OCSD_ERR_MEM;
     } 
     rewind(fp);
-    bytes_read = fread(input_trace_data, 1, input_trace_data_size, fp);
+    fread(input_trace_data, 1, input_trace_data_size, fp);
     fclose(fp);
-    if (bytes_read < (size_t)input_trace_data_size)
-        return OCSD_ERR_FILE_ERROR;
 
     /* load up a memory image */
     filename = default_base_snapshot_path;
@@ -181,10 +178,8 @@ static int initDataBuffers()
         return OCSD_ERR_MEM;
     }
     rewind(fp);
-    bytes_read = fread(program_image_buffer, 1, program_image_size, fp);
+    fread(program_image_buffer, 1, program_image_size, fp);
     fclose(fp);
-    if (bytes_read < (size_t)program_image_size)
-        return OCSD_ERR_FILE_ERROR;
     program_image_address = mem_dump_address;
     return OCSD_OK;
 }
