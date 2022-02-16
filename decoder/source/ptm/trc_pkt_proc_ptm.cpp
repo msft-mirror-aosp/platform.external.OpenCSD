@@ -224,7 +224,6 @@ void TrcPktProcPtm::InitProcessorState()
     m_waitASyncSOPkt = false;
     m_bAsyncRawOp = false;
     m_bOPNotSyncPkt = false;
-    m_excepAltISA = 0;
 
     m_curr_packet.ResetState();
     InitPacketState();
