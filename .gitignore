@@ -14,9 +14,6 @@
 *.la
 *.lo
 
-# gcc dependency files
-*.d
-
 # Shared objects (inc. Windows DLLs)
 *.dll
 *.so
@@ -77,4 +74,3 @@ decoder/docs/html/*
 *.VC.VC.opendb
 *.iobj
 *.ipdb
-decoder/tests/results*

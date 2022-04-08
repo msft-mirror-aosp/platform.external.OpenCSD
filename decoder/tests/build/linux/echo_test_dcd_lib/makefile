@@ -48,9 +48,9 @@ CC_INCLUDES	=	\
 OBJECTS		=	$(BUILD_DIR)/ext_dcd_echo_test.o \
 				$(BUILD_DIR)/ext_dcd_echo_test_fact.o
 
-all: $(LIB_TEST_TARGET_DIR)/$(LIB_NAME).a
+all:  build_dir $(LIB_TEST_TARGET_DIR)/$(LIB_NAME).a
 
-$(LIB_TEST_TARGET_DIR)/$(LIB_NAME).a: $(OBJECTS) | build_dir
+$(LIB_TEST_TARGET_DIR)/$(LIB_NAME).a: $(OBJECTS)
 	mkdir -p $(LIB_TEST_TARGET_DIR)
 	$(LIB) $(ARFLAGS) $(LIB_TEST_TARGET_DIR)/$(LIB_NAME).a $(OBJECTS)
 
@@ -64,7 +64,7 @@ DEPS := $(OBJECTS:%.o=%.d)
 -include $(DEPS)
 
 ## object compile
-$(BUILD_DIR)/%.o : %.c | build_dir
+$(BUILD_DIR)/%.o : %.c
 			$(CC) $(CFLAGS) $(CC_INCLUDES) -MMD $< -o $@ 
 
 #### clean

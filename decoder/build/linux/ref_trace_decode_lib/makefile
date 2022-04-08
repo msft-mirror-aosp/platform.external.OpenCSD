@@ -41,7 +41,6 @@ BUILD_DIR=./$(PLAT_DIR)
 VPATH=	$(OCSD_SOURCE) \
 		$(OCSD_SOURCE)/etmv3 \
 		$(OCSD_SOURCE)/etmv4 \
-		$(OCSD_SOURCE)/ete \
 		$(OCSD_SOURCE)/ptm \
 		$(OCSD_SOURCE)/i_dec \
 		$(OCSD_SOURCE)/mem_acc \
@@ -60,11 +59,10 @@ ETMV3OBJ=	$(BUILD_DIR)/trc_cmp_cfg_etmv3.o \
 			$(BUILD_DIR)/trc_pkt_proc_etmv3_impl.o
 
 ETMV4OBJ=	$(BUILD_DIR)/trc_cmp_cfg_etmv4.o \
-			$(BUILD_DIR)/trc_etmv4_stack_elem.o \
 			$(BUILD_DIR)/trc_pkt_proc_etmv4i.o \
 			$(BUILD_DIR)/trc_pkt_decode_etmv4i.o \
 			$(BUILD_DIR)/trc_pkt_elem_etmv4i.o \
-			$(BUILD_DIR)/trc_cmp_cfg_ete.o
+			$(BUILD_DIR)/trc_etmv4_stack_elem.o
 
 PTMOBJ=		$(BUILD_DIR)/trc_cmp_cfg_ptm.o \
 			$(BUILD_DIR)/trc_pkt_elem_ptm.o \
