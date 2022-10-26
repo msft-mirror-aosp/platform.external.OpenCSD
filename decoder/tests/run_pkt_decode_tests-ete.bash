@@ -53,6 +53,7 @@ BIN_DIR=./bin/linux64/rel/
 # directories for tests using full decode
 declare -a test_dirs_decode=( "001-ack_test"
                               "002-ack_test_scr"
+                              "ete-bc-instr"
                               "ete_ip"
                               "ete_mem"
                               "ete_spec_1"
@@ -67,6 +68,7 @@ declare -a test_dirs_decode=( "001-ack_test"
                               "tme_test"
                               "trace_file_cid_vmid"
                               "trace_file_vmid"
+                              "ts_bit64_set"
                               "ts_marker"
                             )
 
