@@ -46,7 +46,6 @@ ipch/
 *.pdb
 *.exp
 *.ilk
-.vs/
 
 # ignore emacs backup saves
 *~

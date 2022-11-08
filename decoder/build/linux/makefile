@@ -173,7 +173,6 @@ tests: libs
 	cd $(OCSD_ROOT)/tests/build/linux/trc_pkt_lister && $(MAKE)
 	cd $(OCSD_ROOT)/tests/build/linux/c_api_pkt_print_test && $(MAKE)
 	cd $(OCSD_ROOT)/tests/build/linux/mem_buffer_eg && $(MAKE)
-	cd $(OCSD_ROOT)/tests/build/linux/frame_demux_test && $(MAKE)
 
 #
 # build docs
@@ -199,7 +198,6 @@ clean_tests:
 	cd $(OCSD_ROOT)/tests/build/linux/trc_pkt_lister && $(MAKE) clean
 	cd $(OCSD_ROOT)/tests/build/linux/c_api_pkt_print_test && $(MAKE) clean
 	cd $(OCSD_ROOT)/tests/build/linux/mem_buffer_eg && $(MAKE) clean
-	cd $(OCSD_ROOT)/tests/build/linux/frame_demux_test && $(MAKE) clean
 	-rmdir $(OCSD_TESTS)/lib
 
 clean_docs:

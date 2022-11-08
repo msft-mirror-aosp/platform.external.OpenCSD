@@ -590,7 +590,7 @@ DecodeTreeElement *DecodeTree::getNextElement(uint8_t &elemID)
 
 bool DecodeTree::initialise(const ocsd_dcd_tree_src_t type, uint32_t formatterCfgFlags)
 {
-    ocsd_err_t err; 
+    bool initOK = true;
     m_dcd_tree_type = type;
     if(type ==  OCSD_TRC_SRC_FRAME_FORMATTED)
     {
@@ -598,19 +598,15 @@ bool DecodeTree::initialise(const ocsd_dcd_tree_src_t type, uint32_t formatterCf
         m_frame_deformatter_root = new (std::nothrow) TraceFormatterFrameDecoder();
         if(m_frame_deformatter_root)
         {
-            if (m_frame_deformatter_root->Init() != OCSD_OK)
-                return false;
+            m_frame_deformatter_root->Configure(formatterCfgFlags);
             m_frame_deformatter_root->getErrLogAttachPt()->attach(DecodeTree::s_i_error_logger);
-            err = m_frame_deformatter_root->Configure(formatterCfgFlags);
-            if (err != OCSD_OK)
-                return false;
             m_i_decoder_root = dynamic_cast<ITrcDataIn*>(m_frame_deformatter_root);
             m_frame_deformatter_root->SetDemuxStatsBlock(&m_demux_stats);
         }
         else 
-            return false;
+            initOK = false;
     }
-    return true;
+    return initOK;
 }
 
 void DecodeTree::setSingleRoot(TrcPktProcI *pComp)
