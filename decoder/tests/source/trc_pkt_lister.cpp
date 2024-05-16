@@ -76,6 +76,13 @@ static bool has_hsync = false;
 static bool src_addr_n = false;
 static bool stats = false;
 static bool profile = false;
+static bool multi_session = false;  // decode all buffers in snapshot as same config.
+
+static bool macc_cache_disable = false;
+static uint32_t macc_cache_page_size = 0;
+static uint32_t macc_cache_page_num = 0;
+
+static SnapShotReader ss_reader;
 
 int main(int argc, char* argv[])
 {
@@ -107,8 +114,7 @@ int main(int argc, char* argv[])
     moss.str("");
     moss << "Trace Packet Lister : reading snapshot from path " << ss_path << "\n";
     logger.LogMsg(moss.str());
-
-    SnapShotReader ss_reader;
+    
     ss_reader.setSnapshotDir(ss_path);
     ss_reader.setErrorLogger(&err_log);
     ss_reader.setVerboseOutput(ss_verbose);
@@ -188,17 +194,22 @@ void print_help()
     oss << "\nDecode:\n\n";
     oss << "-id <n>             Set an ID to list (may be used multiple times) - default if no id set is for all IDs to be printed\n";
     oss << "-src_name <name>    List packets from a given snapshot source name (defaults to first source found)\n";
+    oss << "-multi_session      List packets from all sources - assumes same config for all (ignored if -src_name used)\n";
     oss << "-dstream_format     Input is DSTREAM framed.\n";
     oss << "-tpiu               Input from TPIU - sync by FSYNC.\n";
     oss << "-tpiu_hsync         Input from TPIU - sync by FSYNC and HSYNC.\n";
-    oss << "-decode             Full decode of the packets from the trace snapshot (default is to list undecoded packets only\n";
+    oss << "-decode             Full decode of the packets from the trace snapshot (default is to list undecoded packets only)\n";
     oss << "-decode_only        Does not list the undecoded packets, just the trace decode.\n";
     oss << "-o_raw_packed       Output raw packed trace frames\n";
     oss << "-o_raw_unpacked     Output raw unpacked trace data per ID\n";
-    oss << "-test_waits <N>     Force wait from packet printer for N packets - test the wait/flush mechanisms for the decoder\n";
     oss << "-src_addr_n         ETE protocol: Split source address ranges on N atoms\n";
     oss << "-stats              Output packet processing statistics (if available).\n";
+    oss << "\nDevelopment:\nOptions used during develop and test of the library\n\n";
     oss << "-profile            Mute logging output while profiling library performance\n";
+    oss << "-test_waits <N>     Force wait from packet printer for N packets - test the wait/flush mechanisms for the decoder\n";
+    oss << "-macc_cache_disable Switch off caching on memory accessor\n";
+    oss << "-macc_cache_p_size  Set size of caching pages\n";
+    oss << "-macc_cache_p_num   Set number of caching pages\n";
     oss << "\nOutput:\n";
     oss << "   Setting any of these options cancels the default output to file & stdout,\n   using _only_ the options supplied.\n\n";
     oss << "-logstdout          Output to stdout -> console.\n";
@@ -347,13 +358,20 @@ bool process_cmd_line_opts(int argc, char* argv[])
             {
                 options_to_process--;
                 optIdx++;
-                if(options_to_process)
+                if (options_to_process) {
                     source_buffer_name = argv[optIdx];
+                    multi_session = false;
+                }
                 else
                 {
                     logger.LogMsg("Trace Packet Lister : Error: Missing source name string on -src_name option\n");
                     bOptsOK = false;
                 }
+            }
+            else if (strcmp(argv[optIdx], "-multi_session") == 0)
+            {
+                if (source_buffer_name.length() == 0)
+                    multi_session = true;
             }
             else if(strcmp(argv[optIdx], "-test_waits") == 0)
             {
@@ -437,6 +455,24 @@ bool process_cmd_line_opts(int argc, char* argv[])
             else if (strcmp(argv[optIdx], "-profile") == 0)
             {
                 profile = true;
+            }
+            else if (strcmp(argv[optIdx], "-macc_cache_disable") == 0)
+            {
+                macc_cache_disable = true;
+            }
+            else if (strcmp(argv[optIdx], "-macc_cache_p_size") == 0)
+            {
+                options_to_process--;
+                optIdx++;
+                if (options_to_process)
+                    macc_cache_page_size  = (uint32_t)strtoul(argv[optIdx], 0, 0);
+            }
+            else if (strcmp(argv[optIdx], "-macc_cache_p_num") == 0)
+            {
+                options_to_process--;
+                optIdx++;
+                if (options_to_process)
+                    macc_cache_page_num = (uint32_t)strtoul(argv[optIdx], 0, 0);
             }
             else
             {
@@ -604,6 +640,131 @@ void PrintDecodeStats(DecodeTree *dcd_tree)
     }
 }
 
+bool ProcessInputFile(DecodeTree *dcd_tree, std::string &in_filename, 
+                      TrcGenericElementPrinter* genElemPrinter, ocsdDefaultErrorLogger& err_logger)
+{
+    bool bOK = true;
+
+    // need to push the data through the decode tree.
+    std::ifstream in;
+    in.open(in_filename, std::ifstream::in | std::ifstream::binary);
+    if (in.is_open())
+    {
+        ocsd_datapath_resp_t dataPathResp = OCSD_RESP_CONT;
+        static const int bufferSize = 1024;
+        uint8_t trace_buffer[bufferSize];   // temporary buffer to load blocks of data from the file
+        uint32_t trace_index = 0;           // index into the overall trace buffer (file).
+
+        // process the file, a buffer load at a time
+        while (!in.eof() && !OCSD_DATA_RESP_IS_FATAL(dataPathResp))
+        {
+            if (dstream_format)
+            {
+                in.read((char*)&trace_buffer[0], 512 - 8);
+            }
+            else
+                in.read((char*)&trace_buffer[0], bufferSize);   // load a block of data into the buffer
+
+            std::streamsize nBuffRead = in.gcount();    // get count of data loaded.
+            std::streamsize nBuffProcessed = 0;         // amount processed in this buffer.
+            uint32_t nUsedThisTime = 0;
+
+            // process the current buffer load until buffer done, or fatal error occurs
+            while ((nBuffProcessed < nBuffRead) && !OCSD_DATA_RESP_IS_FATAL(dataPathResp))
+            {
+                if (OCSD_DATA_RESP_IS_CONT(dataPathResp))
+                {
+                    dataPathResp = dcd_tree->TraceDataIn(
+                        OCSD_OP_DATA,
+                        trace_index,
+                        (uint32_t)(nBuffRead - nBuffProcessed),
+                        &(trace_buffer[0]) + nBuffProcessed,
+                        &nUsedThisTime);
+
+                    nBuffProcessed += nUsedThisTime;
+                    trace_index += nUsedThisTime;
+
+                    // test printers can inject _WAIT responses - see if we are expecting one...
+                    if (ExpectingPPrintWaitResp(dcd_tree, *genElemPrinter))
+                    {
+                        if (OCSD_DATA_RESP_IS_CONT(dataPathResp))
+                        {
+                            // not wait or fatal - log a warning here.
+                            std::ostringstream oss;
+                            oss << "Trace Packet Lister : WARNING : Data in; data Path expected WAIT response\n";
+                            logger.LogMsg(oss.str());
+                        }
+                    }
+                }
+                else // last response was _WAIT
+                {
+                    // may need to acknowledge a wait from the gen elem printer
+                    if (genElemPrinter->needAckWait())
+                        genElemPrinter->ackWait();
+
+                    // dataPathResp not continue or fatal so must be wait...
+                    dataPathResp = dcd_tree->TraceDataIn(OCSD_OP_FLUSH, 0, 0, 0, 0);
+                }
+            }
+
+            /* dump dstream footers */
+            if (dstream_format) {
+                in.read((char*)&trace_buffer[0], 8);
+                if (outRawPacked)
+                {
+                    std::ostringstream oss;
+                    oss << "DSTREAM footer [";
+                    for (int i = 0; i < 8; i++)
+                    {
+                        oss << "0x" << std::hex << (int)trace_buffer[i] << " ";
+                    }
+                    oss << "]\n";
+                    logger.LogMsg(oss.str());
+                }
+            }
+        }
+
+        // fatal error - no futher processing
+        if (OCSD_DATA_RESP_IS_FATAL(dataPathResp))
+        {
+            std::ostringstream oss;
+            oss << "Trace Packet Lister : Data Path fatal error\n";
+            logger.LogMsg(oss.str());
+            ocsdError* perr = err_logger.GetLastError();
+            if (perr != 0)
+                logger.LogMsg(ocsdError::getErrorString(perr));
+            bOK = false;
+        }
+        else
+        {
+            // mark end of trace into the data path
+            dcd_tree->TraceDataIn(OCSD_OP_EOT, 0, 0, 0, 0);            
+        }
+
+        // close the input file.
+        in.close();
+
+        std::ostringstream oss;
+        oss << "Trace Packet Lister : Trace buffer done, processed " << trace_index << " bytes.\n";
+        logger.LogMsg(oss.str());
+        if (stats)
+            PrintDecodeStats(dcd_tree);
+        if (profile)
+            genElemPrinter->printStats();
+
+        // multi-session - reset the decoder for the next pass.
+        if (multi_session)
+            dcd_tree->TraceDataIn(OCSD_OP_RESET, 0, 0, 0, 0);
+    }
+    else
+    {
+        std::ostringstream oss;
+        oss << "Trace Packet Lister : Error : Unable to open trace buffer.\n";
+        logger.LogMsg(oss.str());
+    }
+    return bOK;
+}
+
 void ListTracePackets(ocsdDefaultErrorLogger &err_logger, SnapShotReader &reader, const std::string &trace_buffer_name)
 {
     CreateDcdTreeFromSnapShot tree_creator;
@@ -638,6 +799,22 @@ void ListTracePackets(ocsdDefaultErrorLogger &err_logger, SnapShotReader &reader
                 genElemPrinter->setMute(true);
                 genElemPrinter->set_collect_stats();
             }
+            if (macc_cache_disable || macc_cache_page_size || macc_cache_page_num)
+            {
+                TrcMemAccMapper* pMapper = dcd_tree->getMemAccMapper();
+
+                if (macc_cache_disable)
+                    pMapper->enableCaching(false);
+                else 
+                {
+                    // one value set - set the other to default
+                    if (!macc_cache_page_size)
+                        macc_cache_page_size = MEM_ACC_CACHE_DEFAULT_PAGE_SIZE;
+                    if (!macc_cache_page_num)
+                        macc_cache_page_num = MEM_ACC_CACHE_DEFAULT_MRU_SIZE;
+                    pMapper->setCacheSizes(macc_cache_page_size, macc_cache_page_num);
+                }
+            }
         }
 
         if(decode)
@@ -652,120 +829,45 @@ void ListTracePackets(ocsdDefaultErrorLogger &err_logger, SnapShotReader &reader
             else
                 dcd_tree->clearIDFilter();
 
-            // need to push the data through the decode tree.
-            std::ifstream in;
-            in.open(tree_creator.getBufferFileName(),std::ifstream::in | std::ifstream::binary);
-            if(in.is_open())
+            std::string binFileName;
+            if (!multi_session) 
             {
-                ocsd_datapath_resp_t dataPathResp = OCSD_RESP_CONT;
-                static const int bufferSize = 1024;
-                uint8_t trace_buffer[bufferSize];   // temporary buffer to load blocks of data from the file
-                uint32_t trace_index = 0;           // index into the overall trace buffer (file).
-
-                // process the file, a buffer load at a time
-                while(!in.eof() && !OCSD_DATA_RESP_IS_FATAL(dataPathResp))
-                {
-                    if (dstream_format)
-                    { 
-                        in.read((char *)&trace_buffer[0], 512 - 8);
-                    }
-                    else
-                        in.read((char *)&trace_buffer[0],bufferSize);   // load a block of data into the buffer
-
-                    std::streamsize nBuffRead = in.gcount();    // get count of data loaded.
-                    std::streamsize nBuffProcessed = 0;         // amount processed in this buffer.
-                    uint32_t nUsedThisTime = 0;
-
-                    // process the current buffer load until buffer done, or fatal error occurs
-                    while((nBuffProcessed < nBuffRead) && !OCSD_DATA_RESP_IS_FATAL(dataPathResp))
-                    {
-                        if(OCSD_DATA_RESP_IS_CONT(dataPathResp))
-                        {
-                            dataPathResp = dcd_tree->TraceDataIn(
-                                OCSD_OP_DATA,
-                                trace_index,
-                                (uint32_t)(nBuffRead - nBuffProcessed),
-                                &(trace_buffer[0])+nBuffProcessed,
-                                &nUsedThisTime);
-
-                            nBuffProcessed += nUsedThisTime;
-                            trace_index += nUsedThisTime;
-
-                            // test printers can inject _WAIT responses - see if we are expecting one...
-                            if(ExpectingPPrintWaitResp(dcd_tree, *genElemPrinter))
-                            {
-                                if(OCSD_DATA_RESP_IS_CONT(dataPathResp))
-                                {
-                                    // not wait or fatal - log a warning here.
-                                    std::ostringstream oss;
-                                    oss << "Trace Packet Lister : WARNING : Data in; data Path expected WAIT response\n";
-                                    logger.LogMsg(oss.str());
-                                }
-                            }
-                        }
-                        else // last response was _WAIT
-                        {
-                            // may need to acknowledge a wait from the gen elem printer
-                            if(genElemPrinter->needAckWait())
-                                genElemPrinter->ackWait();
-
-                            // dataPathResp not continue or fatal so must be wait...
-                            dataPathResp = dcd_tree->TraceDataIn(OCSD_OP_FLUSH,0,0,0,0);
-                        }
-                    }
-
-                    /* dump dstream footers */
-                    if (dstream_format) {
-                        in.read((char *)&trace_buffer[0], 8);
-                        if (outRawPacked)
-                        {
-                            std::ostringstream oss;
-                            oss << "DSTREAM footer [";
-                            for (int i = 0; i < 8; i++)
-                            {
-                                oss << "0x" << std::hex << (int)trace_buffer[i] << " ";
-                            }
-                            oss << "]\n";
-                            logger.LogMsg(oss.str());
-                        }
-                    }
-                }
-
-                // fatal error - no futher processing
-                if(OCSD_DATA_RESP_IS_FATAL(dataPathResp))
-                {
-                    std::ostringstream oss;
-                    oss << "Trace Packet Lister : Data Path fatal error\n";
-                    logger.LogMsg(oss.str());
-                    ocsdError *perr = err_logger.GetLastError();
-                    if(perr != 0)
-                        logger.LogMsg(ocsdError::getErrorString(perr));
-
-                }
-                else
-                {
-                    // mark end of trace into the data path
-                    dcd_tree->TraceDataIn(OCSD_OP_EOT,0,0,0,0);
-                }
-
-                // close the input file.
-                in.close();
-
-                std::ostringstream oss;
-                oss << "Trace Packet Lister : Trace buffer done, processed " << trace_index << " bytes.\n";
-                logger.LogMsg(oss.str());
-                if (stats)
-                    PrintDecodeStats(dcd_tree);
-                if (profile)
-                    genElemPrinter->printStats();
+                binFileName = tree_creator.getBufferFileName();
+                ProcessInputFile(dcd_tree, binFileName, genElemPrinter, err_logger);
             }
             else
             {
-                std::ostringstream oss;
-                oss << "Trace Packet Lister : Error : Unable to open trace buffer.\n";
-                logger.LogMsg(oss.str());
-            }
+                std::ostringstream oss; 
+                std::vector<std::string> sourceBuffList;
+                ss_reader.getSourceBufferNameList(sourceBuffList);
 
+                for (size_t i = 0; i < sourceBuffList.size(); i++)
+                {
+                    oss.str("");
+                    oss << "####### Multi Session decode: Buffer " << (i+1) << " of " << sourceBuffList.size();
+                    oss << "; Source name = " << sourceBuffList[i] << ".\n\n";
+                    logger.LogMsg(oss.str());
+
+                    binFileName = tree_creator.getBufferFileNameFromBuffName(sourceBuffList[i]);
+                    if (binFileName.length() <= 0)
+                    {
+                        oss.str("");
+                        oss << "Trace Packet Lister : ERROR : Multi-session decode for buffer " << sourceBuffList[i] << " - buffer not found. Aborting.\n\n";
+                        logger.LogMsg(oss.str());
+                        break;
+                    }
+
+                    if (!ProcessInputFile(dcd_tree, binFileName, genElemPrinter, err_logger)) {
+                        oss.str("");
+                        oss << "Trace Packet Lister : ERROR : Multi-session decode for buffer " << sourceBuffList[i] << " failed. Aborting.\n\n";
+                        logger.LogMsg(oss.str());
+                        break;
+                    }
+                    oss.str("");
+                    oss << "####### Buffer " << (i + 1) << " : " << sourceBuffList[i] << " Complete\n\n";
+                    logger.LogMsg(oss.str());
+                }
+            }
         }
         else
         {
