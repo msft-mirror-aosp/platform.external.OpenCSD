@@ -27,7 +27,7 @@ Releases will appear on the master branch in the git repository with an appropri
 CoreSight Trace Component Support.
 ----------------------------------
 
-_Current Version 1.4.1_
+_Current Version 1.5.2_
 
 ### Current support:
 
@@ -291,11 +291,40 @@ Version and Modification Information
                   Adds in new generic output packet type: OCSD_GEN_TRC_ELEM_INSTRUMENTATION.
     - __Bugfix__: Fix memory leak in mispredict handling (github issue #52 from yabinc)
 
-_Version 1.4.1_:
+- _Version 1.4.1_:
     - __Update__: Test: Update test program trc_pkt_lister with option to have no logging output - final stats only.
     - __Bugfix__: ETM4x: ETE: Fix memory leak / use after free (github issues #53, #58 from yabinc)
     - __Bugfix__: C-API: Fix memory leak with output sink object. (github issue #55)
 
+- _Version 1.4.2_:
+    - __Update__: Decoder memory access - add debug features and cacheing to improve performance of decode.
+                  Caching controllable by API or environment variables.
+    - __Update__: Decode debug options to control potential runaway debug when incorrect memory images input
+                  to decoder.
+                  
+                   - aarch64 instruction check for invalid instruction opcode. (any opcode with 0x0000 as top
+                      16 bits).
+                      
+                   - optional instruction range maximum run limit. Set by environment variable.
+                   
+    - __Update__: Remove VS2015 support.
+    - __Bugfix__: Memory spaces: ensure that decoder memory requests are correctly labelled with Realm and
+                  root characteristics when appropriate.
+    - __Bugfix__: M class tail chained interrupts now correctly handled.    
+    - __Bugfix__: STM: - fix master and channel ID initialisation (github issue #61 from MommeSherif)
+    - __Bugfix__: Test: update HOWTO.md and perf-test-script.base for new paths (github issue #60 from yuxy-c)
+    - __Bugfix__: build: Fix GCC version dir handling for versions of GCC > 9.
+
+
+- _Version 1.5.1_:
+    - __Update__: ETE: Add support for Arch 9.5 FEAT_PAUTH_LR. Add new instructions to disassembler to 
+                  recognise RETA<k>SPPC variants as indirect branches. Adds new test snapshots.
+
+- _Version 1.5.2_:
+    - __Update__: docs: Update documentation for test programs.
+    - __Update__: docs: Update trc_pkt_lister man file.
+    - __Bugfix__: build: fix warnings building library.
+    - __Bugfix__: tests: Fix typo in trc_pkt_lister help output.
 
 Licence Information
 ===================

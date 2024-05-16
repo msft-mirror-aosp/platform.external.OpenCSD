@@ -6,45 +6,168 @@ Test Programs    {#test_progs}
 The Programs
 ------------
 
-There are currently two test programs built alongside the library.
+There are currently a number test programs built alongside the library.
 
-1. `trc_pkt_lister` :  This test the C++ library by taking a trace "snapshot" directory as an input 
-and decodes all or a chosen set of trace sources from within the trace data buffers in the library. Command
-line parameters allow the test program to be controlled. 
+__Principle Test Programs__
 
-2. `c_api_pkt_print_test` : This program tests the "C" API functions, using hardcoded tests 
-based on the same "snapshots" used for the C++ library. Limited user control for this program. 
-This can also run tests using the external test decoder to validate the external decoder API. 
+- `trc_pkt_lister`:
+
+This tests the C++ library by taking a trace "snapshot" directory as an input and decodes all
+or a chosen set of trace sources from within the trace data buffers in the library. Command
+line parameters allow the test program to be controlled.
+
+Users may also run this program on their own trace snapshots to investigate or validate trace from their platforms.
+
+The program may be installed alongside the library onto linux systems, using `make install` from the library build
+directories. This will be installed alongside a `man` file containing relevant user options.
+
+- `c_api_pkt_print_test`:
+
+This program tests the "C" API functions, using hardcoded tests based on the same "snapshots" used
+for the C++ library. Limited user control for this program.
+
+This can also run tests using the external test decoder library to validate the external decoder API. 
 See [external_custom.md](@ref custom_decoders) for details.
 
-These programs are both built at the same time as the library for the same set of platforms.
+__Development Utilities__
+
+These are small utilities, primarily used during the development and test of the decoder library.
+
+- `mem-acc-test`           : tests the memory accessor interfaces.
+- `mem-buffer-eg`          : example using a memory buffer input to the library.
+- `frame-demux-test`       : tests the library CoreSight Frame demux object.
+- `ocsd-perr`              : quickly list the library error codes and descriptions.
+
+__Build and Install__
+
+All the test programs are built at the same time as the library for the same set of platforms.
 See [build_libs.md](@ref build_lib) for build details.
 
-_Note:_ The programs above use the library's [core name mapper helper class] (@ref CoreArchProfileMap) to map 
-the name of the core into a profile / architecture pair that the library can use. 
-The snapshot definition must use one of the names recognised by this class or an error will occur.
+Only `trc_pkt_lister` will be installed alongside the library.
+
 
 Trace "Snapshot" directory.
 ----------------------------
 
-The `.\tests\snapshots` directory contains a number of trace snapshots used for testing the library.
+The `.\tests\snapshots` and `.\tests\snapshots-ete` directories contain a number of trace snapshots
+used for testing the library.
+
 Trace snapshots are dumps of captured binary trace data, CoreSight component configurations and memory 
 dumps to allow trace decode.
 
-Snapshots are generated on ARM targets and can then be analysed offline. The snapshot format is available 
-in a separate document.
+Snapshots are generated on ARM targets and can then be analysed offline. 
+
+__Snapshot Specification__
+
+The principal snapshot format is available in a separate document in
+`.\docs\specs\ARM Trace and Debug Snapshot file format 0v2.pdf`.
+
+The programs above use the library's [core name mapper helper class] (@ref CoreArchProfileMap) to map 
+the name of the core into a profile / architecture pair that the library can use. 
+
+The snapshot definition must use one of the names recognised by this class, or alternatively use an approved
+profile / architecture profile pattern string as defined below.
+
+There are extensions to this specification, reflecting recent architectural changes.
+
+**Dump File Section Space Format**
+
+The dump file section in device .ini files can define a memory space associated with the file.
+This is done using the `space` keyword. Omitting this keyword with cause the test programs to assume 
+that the file applies to all memory spaces enccountered in the trace stream
+
+For complex systems, the same virtual addresses may have differing contents in differing memory spaces.
+The library has extended the memory space names defined in the current specification version to include 
+new names for the Realm and Root memory spaces.
+
+Mappings of names to spaces is used as follows :
+    - `EL1S` : maps file to EL1 / EL0 secure states.
+    - `EL2S` : maps file to EL2 secure state.
+    - `EL3`  : maps file to EL3 secure state.
+    - `EL1N` : maps file to EL1 / EL0 non-secure state.
+    - `EL2` or `EL2N` : maps file to EL2 non-secure state.
+    - `EL1R` : maps file to EL1 / EL0 Realm state.
+    - `EL2R` : maps file to EL2 Realm state.
+    - `ROOT` : maps file to Root state.
+    - `S` : maps file to all secure states.
+    - `N` : maps file to all non-secure states.
+    - `R` : maps file to all Realm states.
+    - `ANY` : maps file to all security states. This is default if the `space` keyword is omitted.
+
+
+e.g. - Dump section examples with differing memory space definitions.
+
+   - dump 1 & 2 overlap in address but are in different memory spaces.
+   - dump 1 & 3 cover the same memory space, but do not overlap in address.
+   - dump 4 covers all memory spaces but does not overlap in address with any of the other dumps.
+
+~~~~~~~~~~~~~~~~
+[dump1]
+file=bindir_64ns/OTHERS_exec
+address=0x00060000
+length=0x21388
+space=N
+
+[dump2]
+file=bindir_64rt/OTHERS_exec
+address=0x00060000
+length=0x21388
+space=ROOT
+
+[dump3]
+file=bindir_64ns/VAL_NON_DET_CODE_exec
+address=0x00010000
+length=0x24bf4
+space=EL1N
+
+[dump4]
+file=bindir_64ns/TEST_NON_DET_CODE_exec
+address=0x00050000
+length=0x26c
+~~~~~~~~~~~~~~~~
+
+**Profile / Architecture pattern string**
+
+Where a specific core name is not used - then a profile / architecture pattern string may be used.
+This enables trace generated on cores with names not in the library to be decoded by the test programs.
+
+Pattern strings can be of the form:
+
+`ARMvM[.m]-P` : 
+    - ARMv   : fixed prefix
+    - M      : architecture major version number 7-9.
+    - .m     : optional minor version number
+    - -P     : profile type, one of -A, -R or -M
+
+
+e.g. `ARMv8.3-A`  , `ARMv7-M`
+
+This format can be used for any ARMv7 / ARMv8 core - including ARM Cortex cores where the name is 
+not one of those mapped in the library.
+
+
+`ARM-{aa|AA}64[-P]` :
+    - ARM-   : fixed prefix
+    - aa64 or AA64 : indicator for aarch64
+    - -P : optional profile - one of -R or -M, if missing A profile is assumed.
+
+e.g. `ARM-aa64` , `ARM-AA64-R`
+
+This format can be used for all Arm v9 architecture cores.
+
 
 The `trc_pkt_lister` program.
 -----------------------------
 
-This will take a snapshot directory as an input, and list and/or decode all the trace packets for a 
-single source, for any currently supported protocol.
+This will take a snapshot directory as an input, and lists and/or
+decodes all the trace packets from a given trace sink, for any source in
+that sink where the protocol is supported.
 
 The output will be a list of discrete packets, generic output packets and any error messages
 to file and/or screen as selected by the input command line options.
 
 By default the program will list packets only (no decode), for the first discovered trace sink
-(ETB, ETF, ETR) in the snapshot directory, with all streams output.
+(ETB, ETF, ETR) in the snapshot directory, with all source streams output.
 
 __Command Line Options__
 
@@ -56,15 +179,19 @@ __Command Line Options__
 *Decode options*
 
 - `-id <n>`          : Set an ID to list (may be used multiple times) - default if no id set is for all IDs to be printed.
-- `-src_name <name>` : List packets from a given snapshot source name (defaults to first source found).
+- `-src_name <name>` : List packets from a given snapshot source name - e.g ETB_0. (defaults to first source found).
+- `-multi_session`   : Decode all buffers listed in snapshot under `buffers` key in `trace.ini`. Uses config of first 
+                       buffer to decode all. Ignored if `-src_name` is used.
+- `-dstream_format`  : Input is DSTREAM framed.
 - `-tpiu`            : Input data is from a TPIU source that has TPIU FSYNC packets present.
 - `-tpiu_hsync`      : Input data is from a TPIU source that has both TPIU FSYNC and HSYNC packets present.
 - `-decode`          : Full decode of the packets from the trace snapshot (default is to list undecoded packets only.
 - `-decode_only`     : Does not list the undecoded packets, just the trace decode.
 - `-src_addr_n`      : ETE protocol; Indicate skipped N atoms in source address packet ranges by breaking the decode 
-                       range into multiple ranges on N atoms.
+                       range into multiple ranges of N atoms.
 - `-o_raw_packed`    : Output raw packed trace frames.
 - `-o_raw_unpacked`  : Output raw unpacked trace data per ID.
+- `-stats`           : Output packet processing statistics (if available).
 
 *Output options*
 
@@ -75,6 +202,15 @@ the options set.
 - `-logfile`            : output to file using the default log file name.
 - `-logfilename <name>` : change the name of the output log file.
 
+*Library Development options*
+
+Options that are only useful if developing or testing the OpenCSD library.
+
+- `-test_waits <N>`  : Force wait from packet printer for N packets - test the wait/flush mechanisms for the decoder.
+- `-profile`         : Mute logging output while profiling library performance.
+- `-macc_cache_disable` : Switch off caching on memory accessor.
+- `-macc_cache_p_size`  : Set size of caching pages.
+- `-macc_cache_p_num`   : Set number of caching pages.
 
 __Test output examples__
 
@@ -109,7 +245,7 @@ Idx:17988; ID:10;	P_HDR : Atom P-header.; W; Cycles=1
 Idx:17989; ID:10;	P_HDR : Atom P-header.; WEE; Cycles=1
 ~~~~~~~~~~~~~~~~
 
-*Juno - ETB_1 selected for STM packet output, raw packet output*
+*Juno - ETB_1 selected which contains STM source output, raw packet output*
 
 Command line:-
 `trc_pkt_lister -ss_dir ..\..\..\snapshots\juno_r1_1 -o_raw_unpacked -src_name ETB_1`

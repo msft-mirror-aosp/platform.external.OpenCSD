@@ -174,6 +174,8 @@ tests: libs
 	cd $(OCSD_ROOT)/tests/build/linux/c_api_pkt_print_test && $(MAKE)
 	cd $(OCSD_ROOT)/tests/build/linux/mem_buffer_eg && $(MAKE)
 	cd $(OCSD_ROOT)/tests/build/linux/frame_demux_test && $(MAKE)
+	cd $(OCSD_ROOT)/tests/build/linux/perr && $(MAKE)
+	cd $(OCSD_ROOT)/tests/build/linux/mem_acc_test && $(MAKE)
 
 #
 # build docs
@@ -200,14 +202,18 @@ clean_tests:
 	cd $(OCSD_ROOT)/tests/build/linux/c_api_pkt_print_test && $(MAKE) clean
 	cd $(OCSD_ROOT)/tests/build/linux/mem_buffer_eg && $(MAKE) clean
 	cd $(OCSD_ROOT)/tests/build/linux/frame_demux_test && $(MAKE) clean
+	cd $(OCSD_ROOT)/tests/build/linux/perr && $(MAKE) clean
+	cd $(OCSD_ROOT)/tests/build/linux/mem_acc_test && $(MAKE) clean
 	-rmdir $(OCSD_TESTS)/lib
 
 clean_docs:
 	-rm -r $(OCSD_ROOT)/docs/html
 
-clean_install:
+clean_install: clean_man
 	-rm    $(INSTALL_LIB_DIR)/lib$(LIB_BASE_NAME).*
 	-rm    $(INSTALL_LIB_DIR)/lib$(LIB_CAPI_NAME).*
 	-rm -r $(INSTALL_INCLUDE_DIR)/$(LIB_UAPI_INC_DIR)
 	-rm    $(INSTALL_BIN_DIR)/trc_pkt_lister
+
+clean_man:
 	-rm    $(INSTALL_MAN_DIR)/trc_pkt_lister.1
