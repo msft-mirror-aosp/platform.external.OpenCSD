@@ -96,6 +96,12 @@
     <None Include="..\..\..\docs\man\trc_pkt_lister.1">
       <Filter>docs-files</Filter>
     </None>
+    <None Include="..\..\..\docs\prog_guide\prog_guide_generic_pkts.md">
+      <Filter>docs-files</Filter>
+    </None>
+    <None Include="..\..\..\docs\prog_guide\prog_guide_main.md">
+      <Filter>docs-files</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\source\trc_frame_deformatter_impl.h">
@@ -510,6 +516,9 @@
     </ClCompile>
     <ClCompile Include="..\..\..\source\ete\trc_cmp_cfg_ete.cpp">
       <Filter>Source Files\ete</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\source\pkt_printers\gen_elem_printer.cpp">
+      <Filter>Source Files\pkt_printers</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

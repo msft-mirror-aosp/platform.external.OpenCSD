@@ -313,6 +313,8 @@
     <None Include="..\..\..\docs\build_libs.md" />
     <None Include="..\..\..\docs\external_custom.md" />
     <None Include="..\..\..\docs\man\trc_pkt_lister.1" />
+    <None Include="..\..\..\docs\prog_guide\prog_guide_generic_pkts.md" />
+    <None Include="..\..\..\docs\prog_guide\prog_guide_main.md" />
     <None Include="..\..\..\docs\test_progs.md" />
   </ItemGroup>
   <ItemGroup>
@@ -440,6 +442,7 @@
     <ClCompile Include="..\..\..\source\ocsd_lib_dcd_register.cpp" />
     <ClCompile Include="..\..\..\source\ocsd_msg_logger.cpp" />
     <ClCompile Include="..\..\..\source\ocsd_version.cpp" />
+    <ClCompile Include="..\..\..\source\pkt_printers\gen_elem_printer.cpp" />
     <ClCompile Include="..\..\..\source\pkt_printers\raw_frame_printer.cpp" />
     <ClCompile Include="..\..\..\source\pkt_printers\trc_print_fact.cpp" />
     <ClCompile Include="..\..\..\source\ptm\trc_cmp_cfg_ptm.cpp" />
