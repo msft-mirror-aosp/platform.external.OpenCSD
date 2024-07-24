@@ -8,13 +8,13 @@ third_party {
   license_type: RESTRICTED
   last_upgrade_date {
     year: 2024
-    month: 5
-    day: 15
+    month: 7
+    day: 24
   }
   homepage: "https://github.com/Linaro/OpenCSD"
   identifier {
     type: "Git"
     value: "https://github.com/Linaro/OpenCSD.git"
-    version: "v1.5.2"
+    version: "v1.5.3"
   }
 }
