@@ -51,13 +51,14 @@ DecodeTree *DecodeTree::CreateDecodeTree(const ocsd_dcd_tree_src_t src_type, uin
         if(dcd_tree->initialise(src_type, formatterCfgFlags))
         {
             s_trace_dcd_trees.push_back(dcd_tree);
+            s_instruction_decoder.envSetAA64_errOnBadOpcode();
         }
         else 
         {
             delete dcd_tree;
             dcd_tree = 0;
         }
-    }
+    }    
     return dcd_tree;
 }
 
@@ -195,9 +196,17 @@ ocsd_err_t DecodeTree::createMemAccMapper(memacc_mapper_t type /* = MEMACC_MAP_G
     // set the access interface
     if(m_default_mapper)
     {
+        bool enableCaching;
+        int cachePageSize, cachePageNum;
+        
+
         m_created_mapper = true;
         setMemAccessI(m_default_mapper);
         m_default_mapper->setErrorLog(s_i_error_logger);
+        TrcMemAccCache::getenvMemaccCacheSizes(enableCaching, cachePageSize, cachePageNum);
+        if ((m_default_mapper->setCacheSizes(cachePageSize, cachePageNum) != OCSD_OK) ||
+            (m_default_mapper->enableCaching(enableCaching) != OCSD_OK))
+            destroyMemAccMapper();
     }
 
     return (m_default_mapper != 0) ? OCSD_OK : OCSD_ERR_MEM;
@@ -224,6 +233,25 @@ void DecodeTree::logMappedRanges()
 {
     if(m_default_mapper)
         m_default_mapper->logMappedRanges();
+}
+
+ocsd_err_t DecodeTree::setMemAccCacheing(const bool enable, const uint16_t page_size, const int nr_pages)
+{
+    ocsd_err_t err = OCSD_OK;
+
+    if (!m_default_mapper)
+        return OCSD_ERR_NOT_INIT;
+
+    if (enable)
+    {
+        // set cache sizes - error if params out of limits
+        err = m_default_mapper->setCacheSizes(page_size, nr_pages, true);
+        if (err == OCSD_OK)
+            err = m_default_mapper->enableCaching(true);
+    }
+    else
+        err = m_default_mapper->enableCaching(false);
+    return err;
 }
 
 /* Memory accessor creation - all on default mem accessor using the 0 CSID for global core space. */

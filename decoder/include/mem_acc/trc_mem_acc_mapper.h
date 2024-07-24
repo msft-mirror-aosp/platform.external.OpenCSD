@@ -84,6 +84,13 @@ public:
     // print out the ranges in this mapper.
     virtual void logMappedRanges() = 0;
 
+    // control memory access caching at runtime
+    ocsd_err_t enableCaching(bool bEnable);
+
+    // set cache page size and number of pages (max 16k size, 256 pages) - 
+    // optionally error if outside limits - otherwise set to max / min automatically
+    ocsd_err_t setCacheSizes(uint16_t page_size, int num_pages, const bool err_on_limit = false);
+
 protected:
     virtual bool findAccessor(const ocsd_vaddr_t address, const ocsd_mem_space_acc_t mem_space, const uint8_t cs_trace_id) = 0;     // set m_acc_curr if found valid range, leave unchanged if not.
     virtual bool readFromCurrent(const ocsd_vaddr_t address, const ocsd_mem_space_acc_t mem_space, const uint8_t cs_trace_id) = 0;
@@ -103,7 +110,7 @@ protected:
 
 
 // address spaces common to all sources using this mapper.
-// trace id unused.
+// trace id unused when differentiating accessors - may be used by underlying read operations.
 class TrcMemAccMapGlobalSpace : public TrcMemAccMapper
 {
 public:

@@ -40,17 +40,12 @@
 /* mappers base class */
 /************************************************************************************/
 
-#define USING_MEM_ACC_CACHE
-
 TrcMemAccMapper::TrcMemAccMapper() :
     m_acc_curr(0),
     m_trace_id_curr(0),
     m_using_trace_id(false),
     m_err_log(0)
 {
-#ifdef USING_MEM_ACC_CACHE
-    m_cache.enableCaching(true);
-#endif
 }
 
 TrcMemAccMapper::TrcMemAccMapper(bool using_trace_id) : 
@@ -59,9 +54,6 @@ TrcMemAccMapper::TrcMemAccMapper(bool using_trace_id) :
     m_using_trace_id(using_trace_id),
     m_err_log(0)
 {
-#ifdef USING_MEM_ACC_CACHE
-    m_cache.enableCaching(true);
-#endif
 }
 
 TrcMemAccMapper::~TrcMemAccMapper()
@@ -72,6 +64,17 @@ void TrcMemAccMapper::setErrorLog(ITraceErrorLog *err_log_i)
 { 
     m_err_log = err_log_i; 
     m_cache.setErrorLog(err_log_i);
+}
+
+ocsd_err_t TrcMemAccMapper::enableCaching(bool bEnable)
+{
+    return m_cache.enableCaching(bEnable);
+}
+
+// set cache page size and number of pages (max 4096 size, 256 pages)
+ocsd_err_t TrcMemAccMapper::setCacheSizes(uint16_t page_size, int num_pages, const bool err_on_limit /*= false*/)
+{
+    return m_cache.setCacheSizes(page_size, num_pages, err_on_limit);
 }
 
 // memory access interface
@@ -88,7 +91,7 @@ ocsd_err_t TrcMemAccMapper::ReadTargetMemory(const ocsd_vaddr_t address, const u
 
         // found a new accessor - invalidate any cache entries used by the previous one.
         if (m_cache.enabled() && bReadFromCurr)
-            m_cache.invalidateAll();
+            m_cache.invalidateByTraceID(cs_trace_id); 
     }
 
     /* if bReadFromCurr then we know m_acc_curr is set */
@@ -119,28 +122,20 @@ ocsd_err_t TrcMemAccMapper::ReadTargetMemory(const ocsd_vaddr_t address, const u
     return err;
 }
 
-void TrcMemAccMapper::InvalidateMemAccCache(const uint8_t /* cs_trace_id */)
-{
-    // default mapper does not use cs_trace_id for cache invalidation.
+void TrcMemAccMapper::InvalidateMemAccCache(const uint8_t cs_trace_id)
+{    
     if (m_cache.enabled())
-        m_cache.invalidateAll();
-    m_acc_curr = 0;
+        m_cache.invalidateByTraceID(cs_trace_id);
 }
 
 void TrcMemAccMapper::RemoveAllAccessors()
 {
-    TrcMemAccessorBase *pAcc = 0;
-    pAcc = getFirstAccessor();
-    while(pAcc != 0)
-    {
-        TrcMemAccFactory::DestroyAccessor(pAcc);
-        pAcc = getNextAccessor();
-        if (m_cache.enabled())
-            m_cache.invalidateAll();
-    }
     clearAccessorList();
-    if (m_cache.enabled())
+    if (m_cache.enabled()) 
+    {
+        m_cache.invalidateAll();
         m_cache.logAndClearCounts();
+    }
 }
 
 ocsd_err_t TrcMemAccMapper::RemoveAccessorByAddress(const ocsd_vaddr_t st_address, const ocsd_mem_space_acc_t mem_space, const uint8_t cs_trace_id /* = 0 */)
@@ -151,12 +146,13 @@ ocsd_err_t TrcMemAccMapper::RemoveAccessorByAddress(const ocsd_vaddr_t st_addres
         err = RemoveAccessor(m_acc_curr);
         m_acc_curr = 0;
         if (m_cache.enabled())
+        {
             m_cache.invalidateAll();
+            m_cache.logAndClearCounts();
+        }
     }
     else
-        err = OCSD_ERR_INVALID_PARAM_VAL;
-    if (m_cache.enabled())
-        m_cache.logAndClearCounts();
+        err = OCSD_ERR_INVALID_PARAM_VAL;        
     return err;
 }
 
@@ -174,7 +170,6 @@ void TrcMemAccMapper::LogWarn(const ocsd_err_t err, const std::string &msg)
         m_err_log->LogError(ITraceErrorLog::HANDLE_GEN_INFO, &err_ocsd);
     }
 }
-
 
 /************************************************************************************/
 /* mappers global address space class - no differentiation in core trace IDs */
@@ -267,6 +262,7 @@ TrcMemAccessorBase *TrcMemAccMapGlobalSpace::getNextAccessor()
 void TrcMemAccMapGlobalSpace::clearAccessorList()
 {
     m_acc_global.clear();
+    m_acc_curr = 0;
 }
 
 ocsd_err_t TrcMemAccMapGlobalSpace::RemoveAccessor(const TrcMemAccessorBase *p_accessor)
@@ -278,9 +274,15 @@ ocsd_err_t TrcMemAccMapGlobalSpace::RemoveAccessor(const TrcMemAccessorBase *p_a
         if(p_acc == p_accessor)
         {
             m_acc_global.erase(m_acc_it);
-            TrcMemAccFactory::DestroyAccessor(p_acc);
             p_acc = 0;
             bFound = true;
+            if (m_cache.enabled())
+            {
+                m_cache.invalidateAll();
+                m_cache.logAndClearCounts();
+            }
+            if (m_acc_curr == p_accessor)
+                m_acc_curr = 0;
         }
         else
             p_acc = getNextAccessor();
