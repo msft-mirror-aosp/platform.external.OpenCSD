@@ -1,5 +1,5 @@
 ########################################################
-# Copyright 2019 ARM Limited. All rights reserved.
+# Copyright 2022 ARM Limited. All rights reserved.
 # 
 # Redistribution and use in source and binary forms, with or without modification, 
 # are permitted provided that the following conditions are met:
@@ -29,13 +29,13 @@
 #################################################################################
 
 ########
-# RCTDL - test makefile for snapshot lister test.
+# opencsd: makefile for the perr error lister
 #
 
 CXX := $(MASTER_CXX)
 LINKER := $(MASTER_LINKER)	
 
-PROG = mem-buffer-eg
+PROG = mem-acc-test
 
 BUILD_DIR=./$(PLAT_DIR)
 
@@ -43,13 +43,11 @@ VPATH	=	 $(OCSD_TESTS)/source
 
 CXX_INCLUDES	=	\
 			-I$(OCSD_TESTS)/source \
-			-I$(OCSD_INCLUDE) \
-			-I$(OCSD_TESTS)/snapshot_parser_lib/include
+			-I$(OCSD_INCLUDE)
 
-OBJECTS		=	$(BUILD_DIR)/mem_buff_demo.o
+OBJECTS		=	$(BUILD_DIR)/mem_acc_test.o
 
-LIBS		=	-L$(LIB_TEST_TARGET_DIR) -lsnapshot_parser \
-				-L$(LIB_TARGET_DIR) -l$(LIB_BASE_NAME)
+LIBS		=	-L$(LIB_TEST_TARGET_DIR) -L$(LIB_TARGET_DIR) -l$(LIB_BASE_NAME)
 
 all: copy_libs
 
@@ -65,7 +63,7 @@ build_dir:
 
 .PHONY: copy_libs
 copy_libs: $(BIN_TEST_TARGET_DIR)/$(PROG)
-	cp $(LIB_TARGET_DIR)/*.so* $(BIN_TEST_TARGET_DIR)/.
+	cp $(LIB_TARGET_DIR)/*.$(SHARED_LIB_SUFFIX)* $(BIN_TEST_TARGET_DIR)/.
 
 
 
@@ -84,7 +82,7 @@ $(BUILD_DIR)/%.o : %.cpp | build_dir
 clean :
 	-rm $(BIN_TEST_TARGET_DIR)/$(PROG) $(OBJECTS)
 	-rm $(DEPS)
-	-rm $(BIN_TEST_TARGET_DIR)/*.so*
+	-rm $(BIN_TEST_TARGET_DIR)/*.$(SHARED_LIB_SUFFIX)*
 	-rmdir $(BUILD_DIR)
 
 # end of file makefile

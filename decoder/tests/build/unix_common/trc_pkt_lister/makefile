@@ -28,64 +28,76 @@
 # 
 #################################################################################
 
-########  
-# RCTDL - test makefile for simple c api packet list test.
+########
+# RCTDL - test makefile for snapshot lister test.
 #
 
-CC := $(MASTER_CC)
+CXX := $(MASTER_CXX)
 LINKER := $(MASTER_LINKER)	
 
-PROG = c_api_pkt_print_test
+PROG = trc_pkt_lister
+PROG_S = trc_pkt_lister_s
 
 BUILD_DIR=./$(PLAT_DIR)
 
 VPATH	=	 $(OCSD_TESTS)/source 
 
-CC_INCLUDES	=	\
+CXX_INCLUDES	=	\
 			-I$(OCSD_TESTS)/source \
-			-I$(OCSD_TESTS)/ext_dcd_test_eg/c_api_echo_test \
-			-I$(OCSD_INCLUDE) 
+			-I$(OCSD_INCLUDE) \
+			-I$(OCSD_TESTS)/snapshot_parser_lib/include
 
-OBJECTS		=	$(BUILD_DIR)/c_api_pkt_print_test.o 
+OBJECTS		=	$(BUILD_DIR)/trc_pkt_lister.o
 
-LIBS		=	-L$(LIB_TARGET_DIR) -l$(LIB_BASE_NAME) -l$(LIB_CAPI_NAME) \
-				-L$(LIB_TEST_TARGET_DIR) -l_echo_test_dcd
+LIBS		=	-L$(LIB_TEST_TARGET_DIR) -lsnapshot_parser \
+				-L$(LIB_TARGET_DIR) -l$(LIB_BASE_NAME)
 
 all: copy_libs
 
-test_app: 	$(BIN_TEST_TARGET_DIR)/$(PROG)
+test_app: $(BIN_TEST_TARGET_DIR)/$(PROG)
 
 
  $(BIN_TEST_TARGET_DIR)/$(PROG): $(OBJECTS) | build_dir
 			mkdir -p  $(BIN_TEST_TARGET_DIR)
 			$(LINKER) $(LDFLAGS) $(OBJECTS) $(LIBS) -o $(BIN_TEST_TARGET_DIR)/$(PROG)
-			cp $(LIB_TARGET_DIR)/*.so .
+
+$(BIN_TEST_TARGET_DIR)/$(PROG_S): $(OBJECTS) | build_dir
+			mkdir -p  $(BIN_TEST_TARGET_DIR)
+			$(LINKER) -static $(LDFLAGS) $(OBJECTS) $(LIBS) -o $(BIN_TEST_TARGET_DIR)/$(PROG_S)
+
+
 
 build_dir:
 	mkdir -p $(BUILD_DIR)
 
 .PHONY: copy_libs
+ifdef TEST_STATIC_LINKING
+copy_libs: $(BIN_TEST_TARGET_DIR)/$(PROG_S) 
+endif
 copy_libs: $(BIN_TEST_TARGET_DIR)/$(PROG)
-	cp $(LIB_TARGET_DIR)/*.so $(BIN_TEST_TARGET_DIR)/.
+	cp $(LIB_TARGET_DIR)/*.$(SHARED_LIB_SUFFIX)* $(BIN_TEST_TARGET_DIR)/.
+
 
 
 #### build rules
-
 ## object dependencies
 DEPS := $(OBJECTS:%.o=%.d)
 
 -include $(DEPS)
 
 ## object compile
-$(BUILD_DIR)/%.o : %.c | build_dir
-			$(CC) $(CFLAGS) $(CC_INCLUDES) -MMD $< -o $@ 
+$(BUILD_DIR)/%.o : %.cpp | build_dir
+			$(CXX) $(CXXFLAGS) $(CXX_INCLUDES) -MMD $< -o $@
 
 #### clean
 .PHONY: clean
 clean :
 	-rm $(BIN_TEST_TARGET_DIR)/$(PROG) $(OBJECTS)
+ifdef TEST_STATIC_LINKING
+	-rm $(BIN_TEST_TARGET_DIR)/$(PROG_S)
+endif
 	-rm $(DEPS)
-	-rm ./*.so
+	-rm $(BIN_TEST_TARGET_DIR)/*.$(SHARED_LIB_SUFFIX)*
 	-rmdir $(BUILD_DIR)
 
 # end of file makefile

@@ -1,5 +1,5 @@
 ########################################################
-# Copyright 2022 ARM Limited. All rights reserved.
+# Copyright 2015 ARM Limited. All rights reserved.
 # 
 # Redistribution and use in source and binary forms, with or without modification, 
 # are permitted provided that the following conditions are met:
@@ -28,61 +28,64 @@
 # 
 #################################################################################
 
-########
-# opencsd: makefile for the perr error lister
+########  
+# RCTDL - test makefile for simple c api packet list test.
 #
 
-CXX := $(MASTER_CXX)
+CC := $(MASTER_CC)
 LINKER := $(MASTER_LINKER)	
 
-PROG = ocsd-perr
+PROG = c_api_pkt_print_test
 
 BUILD_DIR=./$(PLAT_DIR)
 
 VPATH	=	 $(OCSD_TESTS)/source 
 
-CXX_INCLUDES	=	\
+CC_INCLUDES	=	\
 			-I$(OCSD_TESTS)/source \
-			-I$(OCSD_INCLUDE)
+			-I$(OCSD_TESTS)/ext_dcd_test_eg/c_api_echo_test \
+			-I$(OCSD_INCLUDE) 
 
-OBJECTS		=	$(BUILD_DIR)/perr.o
+OBJECTS		=	$(BUILD_DIR)/c_api_pkt_print_test.o 
 
-LIBS		=	-L$(LIB_TEST_TARGET_DIR) -L$(LIB_TARGET_DIR) -l$(LIB_BASE_NAME)
+LIBS		=	-L$(LIB_TARGET_DIR) -l$(LIB_BASE_NAME) -l$(LIB_CAPI_NAME) \
+				-L$(LIB_TEST_TARGET_DIR) -l_echo_test_dcd
 
 all: copy_libs
 
-test_app: $(BIN_TEST_TARGET_DIR)/$(PROG)
+test_app: 	$(BIN_TEST_TARGET_DIR)/$(PROG)
 
 
  $(BIN_TEST_TARGET_DIR)/$(PROG): $(OBJECTS) | build_dir
 			mkdir -p  $(BIN_TEST_TARGET_DIR)
 			$(LINKER) $(LDFLAGS) $(OBJECTS) $(LIBS) -o $(BIN_TEST_TARGET_DIR)/$(PROG)
+			cp $(LIB_TARGET_DIR)/*.$(SHARED_LIB_SUFFIX) .
 
 build_dir:
 	mkdir -p $(BUILD_DIR)
 
 .PHONY: copy_libs
 copy_libs: $(BIN_TEST_TARGET_DIR)/$(PROG)
-	cp $(LIB_TARGET_DIR)/*.so* $(BIN_TEST_TARGET_DIR)/.
-
+	cp $(LIB_TARGET_DIR)/*.$(SHARED_LIB_SUFFIX) $(BIN_TEST_TARGET_DIR)/.
 
 
 #### build rules
+
 ## object dependencies
 DEPS := $(OBJECTS:%.o=%.d)
 
 -include $(DEPS)
 
 ## object compile
-$(BUILD_DIR)/%.o : %.cpp | build_dir
-			$(CXX) $(CXXFLAGS) $(CXX_INCLUDES) -MMD $< -o $@
+$(BUILD_DIR)/%.o : %.c | build_dir
+			$(CC) $(CFLAGS) $(CC_INCLUDES) -MMD $< -o $@ 
 
 #### clean
 .PHONY: clean
 clean :
 	-rm $(BIN_TEST_TARGET_DIR)/$(PROG) $(OBJECTS)
 	-rm $(DEPS)
-	-rm $(BIN_TEST_TARGET_DIR)/*.so*
+	-rm ./*.$(SHARED_LIB_SUFFIX)
 	-rmdir $(BUILD_DIR)
 
 # end of file makefile
