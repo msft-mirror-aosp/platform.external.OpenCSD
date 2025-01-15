@@ -27,18 +27,26 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 #################################################################################
-# OpenCSD - main Linux makefile for libraries and tests
-#
-# command line options
-# DEBUG=1 	    create a debug build
-#
 
-# GCC flags
-export PLATFORM_CFLAGS := -Wlogical-op
-export PLATFORM_CXXFLAGS := -Wlogical-op
-export PLATFORM_LDFLAGS := -Wl,-z,defs
+## Set up some additional parameters for development environment builds. ##
 
-export SONAME_FLAG := -soname
-export SHARED_LIB_SUFFIX := so
+## define arch/build sub-dirs for non installed dev builds
+ifndef ARCH
+ARCH := $(shell uname -m || echo not)
+endif
 
-include ../unix_common/makefile.common
+CFLAGS := -arch $(ARCH)
+CXXFLAGS := -arch $(ARCH)
+LDFLAGS := -arch $(ARCH)
+
+# platform bit size variant
+ifeq ($(ARCH),x86_64)
+   BIT_VARIANT=-x86_64
+else ifeq ($(ARCH),arm64)
+   BIT_VARIANT=-arm64
+endif
+
+PLAT_DIR=darwin$(BIT_VARIANT)/$(BUILD_VARIANT)
+
+# include the main makefile
+include makefile
