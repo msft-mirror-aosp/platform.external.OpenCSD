@@ -101,7 +101,9 @@ ocsd_datapath_resp_t TrcPktDecodeEtmV4I::processPacket()
             m_need_addr = true;
             if(m_curr_packet_in->getType() == ETM4_PKT_I_TRACE_INFO)
             {
-                doTraceInfoPacket();
+                if (!doTraceInfoPacket())
+                    resp = OCSD_RESP_FATAL_SYS_ERR;
+
                 m_curr_state = DECODE_PKTS;
                 m_return_stack.flush();
             }
@@ -206,6 +208,9 @@ ocsd_err_t TrcPktDecodeEtmV4I::onProtocolConfig()
     m_instr_info.wfi_wfe_branch = m_config->wfiwfeBranch() ? 1 : 0;
     m_instr_info.pe_type.arch = m_config->archVersion();
     m_instr_info.pe_type.profile = m_config->coreProfile();
+    m_instr_info.track_it_block = 1;    // use IT condition number to set is cond flags.
+
+    clearThumbITBlockConditions();
 
     m_IASize64 = (m_config->iaSizeMax() == 64);
 
@@ -240,7 +245,8 @@ ocsd_err_t TrcPktDecodeEtmV4I::onProtocolConfig()
     m_direct_br_chk = (bool)(getComponentOpMode() & OCSD_OPFLG_N_UNCOND_DIR_BR_CHK);
     m_strict_br_chk = (bool)(getComponentOpMode() & OCSD_OPFLG_STRICT_N_UNCOND_BR_CHK);
     m_range_cont_chk = (bool)(getComponentOpMode() & OCSD_OPFLG_CHK_RANGE_CONTINUE);
-    
+    m_br_check_no_thumb = (bool)(getComponentOpMode() & OCSD_OPFLG_N_UNCOND_CHK_NO_THUMB);
+
     return err;
 }
 
@@ -329,8 +335,12 @@ ocsd_err_t TrcPktDecodeEtmV4I::decodePacket()
         break;
 
     case ETM4_PKT_I_TRACE_INFO:
-        // skip subsequent TInfo packets.
-        m_return_stack.flush();
+        {
+            // put a TINFO element on the stack - ensure we control RS push / pop during 
+            // wait for TINFO addr 
+            if (m_P0_stack.createParamElemNoParam(P0_TINFO, false, m_curr_packet_in->getType(), m_index_curr_pkt) == 0)
+                bAllocErr = true;
+        }
         break;
 
     case ETM4_PKT_I_TRACE_ON:
@@ -475,6 +485,7 @@ ocsd_err_t TrcPktDecodeEtmV4I::decodePacket()
             params[0] = m_curr_packet_in->getCC();
             if (m_P0_stack.createParamElem(P0_CC, false, m_curr_packet_in->getType(), m_index_curr_pkt, params) == 0)
                 bAllocErr = true;
+            m_elem_res.P0_commit = m_curr_packet_in->getCommitElem();
 
         }
         break;
@@ -653,11 +664,21 @@ ocsd_err_t TrcPktDecodeEtmV4I::decodePacket()
     return err;
 }
 
-void TrcPktDecodeEtmV4I::doTraceInfoPacket()
+// On first trace info we see - set up the trace parameters it contains. 
+bool TrcPktDecodeEtmV4I::doTraceInfoPacket()
 {
     m_trace_info = m_curr_packet_in->getTraceInfo();
     m_cc_threshold = m_curr_packet_in->getCCThreshold();
     m_curr_spec_depth = m_curr_packet_in->getCurrSpecDepth();
+
+    // create m_curr_spec_depth unseen elements at the start of the P0 stack
+    if (m_P0_stack.createUnseenUncommitedP0Elem(m_curr_spec_depth, m_curr_packet_in->getType(), m_index_curr_pkt) != m_curr_spec_depth)
+        return false;
+    
+    // mark mark the TINFO position.
+    if (m_P0_stack.createParamElemNoParam(P0_TINFO, false, m_curr_packet_in->getType(), m_index_curr_pkt) == 0)
+        return false;    
+
     /* put a trans marker in stack if started in trans state */
     if (m_trace_info.bits.in_trans_state)
         m_P0_stack.createParamElemNoParam(P0_TRANS_TRACE_INIT, false, m_curr_packet_in->getType(), m_index_curr_pkt);
@@ -666,6 +687,7 @@ void TrcPktDecodeEtmV4I::doTraceInfoPacket()
 #ifdef DATA_TRACE_SUPPORTED
     m_p0_key = m_curr_packet_in->getP0Key();
 #endif
+    return true;
 }
 
 /* Element resolution
@@ -748,6 +770,7 @@ ocsd_err_t TrcPktDecodeEtmV4I::commitElements()
         {
             pElem = m_P0_stack.back();  // get oldest element
             err_idx = pElem->getRootIndex(); // save index in case of error.
+            bPopElem = true;
 
             switch (pElem->getP0Type())
             {
@@ -767,10 +790,12 @@ ocsd_err_t TrcPktDecodeEtmV4I::commitElements()
                 {
                 TrcStackElemAddr *pAddrElem = dynamic_cast<TrcStackElemAddr *>(pElem);
                 m_return_stack.clear_pop_pending(); // address removes the need to pop the indirect address target from the stack
+                if (m_return_stack.is_t_info_wait_addr())
+                    m_return_stack.clear_t_info_wait_addr(); // also may clear wait for address after TINFO
                 if (pAddrElem)
                 {
                     SetInstrInfoInAddrISA(pAddrElem->getAddr().val, pAddrElem->getAddr().isa);
-                    m_need_addr = false;
+                    m_need_addr = false;                    
                 }
                 }
                 break;
@@ -895,6 +920,17 @@ ocsd_err_t TrcPktDecodeEtmV4I::commitElements()
             case P0_ITE:
                 err = processITEElem(pElem);
                 break;
+
+            // speculative element traced before the sync TraceInfo packet we started at.
+            case P0_UNSEEN_UNCOMMITTED:
+                m_elem_res.P0_commit--;
+                break;
+
+            case P0_TINFO:
+                // don't push RS until we see address element
+                m_return_stack.set_tinfo_wait_addr();
+                m_return_stack.flush();
+                break;
             }
 
             if(bPopElem)
@@ -950,18 +986,19 @@ ocsd_err_t TrcPktDecodeEtmV4I::commitElemOnEOT()
         // uncommited P0 element.
         pElem = m_P0_stack.back();
             
-            switch(pElem->getP0Type())
-            {
-                // clear stack and stop
-            case P0_UNKNOWN:
-            case P0_ATOM:
-            case P0_TRC_ON:
-            case P0_EXCEP:
-            case P0_EXCEP_RET:
-            case P0_OVERFLOW:
-            case P0_Q:
-                m_P0_stack.delete_all();
-                break;
+        switch(pElem->getP0Type())
+        {
+            // clear stack and stop
+        case P0_UNKNOWN:
+        case P0_ATOM:
+        case P0_TRC_ON:
+        case P0_EXCEP:
+        case P0_EXCEP_RET:
+        case P0_OVERFLOW:
+        case P0_Q:
+        case P0_UNSEEN_UNCOMMITTED:
+            m_P0_stack.delete_all();
+            break;
 
             //skip
         case P0_ADDR:
@@ -985,6 +1022,7 @@ ocsd_err_t TrcPktDecodeEtmV4I::commitElemOnEOT()
 
             // others - skip non P0
         case P0_TRANS_TRACE_INIT:
+        case P0_TINFO:
             break;
 
             // output
@@ -1072,13 +1110,6 @@ ocsd_err_t TrcPktDecodeEtmV4I::cancelElements()
                     P0StackDone = true;
             }
         }
-        // may have some unseen elements
-        else if (m_unseen_spec_elem)
-        {
-            m_unseen_spec_elem--;
-            m_elem_res.P0_cancel--;
-        }
-        // otherwise we have some sort of overrun
         else
         {
             // too few elements for commit operation - decode error.
@@ -1119,7 +1150,7 @@ ocsd_err_t TrcPktDecodeEtmV4I::mispredictAtom()
         {
             if (pElem->getP0Type() == P0_ATOM)
             {
-                TrcStackElemAtom *pAtomElem = dynamic_cast<TrcStackElemAtom *>(pElem);
+                TrcStackElemAtom* pAtomElem = dynamic_cast<TrcStackElemAtom*>(pElem);
                 if (pAtomElem)
                 {
                     pAtomElem->mispredictNewest();
@@ -1131,14 +1162,19 @@ ocsd_err_t TrcPktDecodeEtmV4I::mispredictAtom()
             {
                 // need to disregard any addresses that appear between mispredict and the atom in question
                 m_P0_stack.erase_curr_from_front();
+            }            
+            else if (pElem->getP0Type() == P0_UNSEEN_UNCOMMITTED)
+            {
+                bDone = true;  // mispredict in one of the uncommitted elements before sync - disregard.
+                bFoundAtom = true;
             }
         }
         else
             bDone = true;
     }
    
-    // if missed atom then either overrun error or mispredict on unseen element
-    if (!bFoundAtom && !m_unseen_spec_elem)
+    // if no atom or unseed element the overrun
+    if (!bFoundAtom)
     {
         err = OCSD_ERR_COMMIT_PKT_OVERRUN;
         err = handlePacketSeqErr(err, m_index_curr_pkt, "Not found mispredict atom");            
@@ -1366,12 +1402,13 @@ ocsd_err_t TrcPktDecodeEtmV4I::processAtom(const ocsd_atm_val atom)
                 m_instr_info.instr_addr = m_instr_info.branch_addr;
                 if (m_instr_info.is_link)
                     m_return_stack.push(nextAddr, m_instr_info.isa);
+                clearThumbITBlockConditions(); // took branch, clear IT block
 
             }
-            else if (m_direct_br_chk || m_strict_br_chk)  // consistency checks on N atoms?
+            else if (m_direct_br_chk || m_strict_br_chk) // consistency checks on N atoms?
             {
                 // N atom - but direct branch instruction not conditional - bad input image?
-                if (!m_instr_info.is_conditional)
+                if (!m_instr_info.is_conditional && !skipThumbNCondCheck())
                 {
                     // Some ETM IP incorrectly trace a taken branch to next instruction as N
                     // look for branch where it is not next instruction if direct branch checks only
@@ -1391,6 +1428,8 @@ ocsd_err_t TrcPktDecodeEtmV4I::processAtom(const ocsd_atm_val atom)
                 if (m_instr_info.is_link)
                     m_return_stack.push(nextAddr,m_instr_info.isa);
 
+                clearThumbITBlockConditions(); // took branch, clear IT block
+
                 // mark last atom as BR indirect - if no address next need addr from return stack.
                 m_return_stack.set_pop_pending();  
 
@@ -1402,7 +1441,7 @@ ocsd_err_t TrcPktDecodeEtmV4I::processAtom(const ocsd_atm_val atom)
             else if (m_strict_br_chk) // consistency checks on N atoms?
             {
                 // N atom - check if conditional - only in strict check mode.
-                if (!m_instr_info.is_conditional)
+                if (!m_instr_info.is_conditional && !skipThumbNCondCheck())
                 {
                     err = handleBadImageError(pElem->getRootIndex(), "Bad program image - N Atom on unconditional indirect BR.\n");
                     return err;
@@ -1632,6 +1671,8 @@ ocsd_err_t TrcPktDecodeEtmV4I::processException()
     }
     outElem().excep_ret_addr_br_tgt = branch_target;
     outElem().exception_number = pExceptElem->getExcepNum();
+
+    clearThumbITBlockConditions(); // took exception, clear IT block
 
     m_P0_stack.delete_popped();     // clear the used elements from the stack
     return err;

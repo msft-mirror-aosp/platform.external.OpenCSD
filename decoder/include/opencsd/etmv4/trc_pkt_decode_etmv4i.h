@@ -78,7 +78,7 @@ protected:
     ocsd_err_t mispredictAtom();    // mispredict an atom
     ocsd_err_t discardElements();   // discard elements and flush
 
-    void doTraceInfoPacket();
+    bool doTraceInfoPacket();
     void updateContext(TrcStackElemCtxt *pCtxtElem, OcsdTraceElement &elem);
     
     // process atom will create instruction trace, or no memory access trace output elements. 
@@ -184,8 +184,7 @@ private:
 
     // speculative trace 
     int m_curr_spec_depth;                
-    int m_max_spec_depth;   // nax depth - from ID reg, beyond which auto-commit occurs 
-    int m_unseen_spec_elem; // speculative elements at decode start
+    int m_max_spec_depth;   // max depth - from ID reg, beyond which auto-commit occurs 
 
 /** Remove elements that are associated with data trace */
 #ifdef DATA_TRACE_SUPPORTED
@@ -245,6 +244,7 @@ private:
     bool m_need_ctxt;   //!< need context to continue
     bool m_need_addr;   //!< need an address to continue
     bool m_elem_pending_addr;    //!< next address packet is needed for prev element.
+    
 
     ocsd_instr_info m_instr_info;  //!< instruction info for code follower - in address is the next to be decoded.
 
@@ -277,10 +277,22 @@ private:
         return true;
     };
 
+    bool skipThumbNCondCheck() {
+        if ((m_instr_info.isa == ocsd_isa_thumb2) && m_br_check_no_thumb)
+            return true; // skip on Thumb2 + no thumb check
+        return false;
+    }
+
+    // clear thumb IT block conditions - faster just to do it irrespective of if we are in Thumb mode.
+    void clearThumbITBlockConditions() {
+        m_instr_info.thumb_it_conditions = 0;
+    }
+
     // consistency check flags
     bool m_direct_br_chk;
     bool m_strict_br_chk;
     bool m_range_cont_chk;
+    bool m_br_check_no_thumb;
 
 //** output element handling
     OcsdGenElemStack m_out_elem;  //!< output element stack.

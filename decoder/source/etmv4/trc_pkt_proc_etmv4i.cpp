@@ -478,6 +478,7 @@ void TrcPktProcEtmV4I::iPktTraceInfo(const uint8_t lastByte)
         {
             idx += extractContField(m_currPacketData,idx,fieldVal);
             m_curr_packet.setTraceInfoSpec(fieldVal);
+            m_curr_packet.trace_info.bits.spec_field_present = 1;
         }
         if((presSect & TINFO_CYCT_SECT) && (idx < m_currPacketData.size()))
         {
@@ -490,7 +491,14 @@ void TrcPktProcEtmV4I::iPktTraceInfo(const uint8_t lastByte)
             /* Trace commit window unsupported in current ETE versions */
         }
         m_process_state = SEND_PKT;
-        m_first_trace_info = true;
+
+        // check if this is the first trace info we have found..
+        if (!m_first_trace_info) {
+            m_curr_packet.trace_info.bits.initial_t_info = 1;
+
+            // indicate we have found the first TINFO To start decode.
+            m_first_trace_info = true; 
+        }
     }
 
 }
@@ -605,7 +613,7 @@ void TrcPktProcEtmV4I::iPktCycleCntF123(const uint8_t lastByte)
 
     if( m_currPacketData.size() == 1)
     {
-        m_count_done = m_commit_done = false; 
+        m_count_done = m_commit_done = m_ccf2_maxspec_commit = false;
         m_has_count = true;
 
         if(format == ETM4_PKT_I_CCNT_F3)
@@ -631,17 +639,24 @@ void TrcPktProcEtmV4I::iPktCycleCntF123(const uint8_t lastByte)
             if(m_config.commitOpt1())
                 m_commit_done = true;
         }
+        else if (format == ETM4_PKT_I_CCNT_F2)
+        {
+            /* check F bit for CC format 2 */
+            if ((lastByte & 0x1) == 0x1)
+                m_ccf2_maxspec_commit = true;
+        }
     }
     else if((format == ETM4_PKT_I_CCNT_F2) && ( m_currPacketData.size() == 2))
     {
-        int commit_offset = ((lastByte & 0x1) == 0x1) ? ((int)m_config.MaxSpecDepth() - 15) : 1;
-        int commit_elements = ((lastByte >> 4) & 0xF);
-        commit_elements += commit_offset;
-
-        // TBD: warning if commit elements < 0?
+        int commit_offset, commit_elements;
 
         m_curr_packet.setCycleCount(m_curr_packet.getCCThreshold() + (lastByte & 0xF));
-        m_curr_packet.setCommitElements(commit_elements);
+        if (!m_config.commitOpt1()) {
+            commit_offset = (m_ccf2_maxspec_commit) ? ((int)m_config.MaxSpecDepth() - 15) : 1;
+            commit_elements = ((lastByte >> 4) & 0xF);
+            commit_elements += commit_offset;
+            m_curr_packet.setCommitElements(commit_elements);
+        }
         m_process_state = SEND_PKT;
     }
     else
