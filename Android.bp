@@ -55,12 +55,13 @@ cc_library_static {
     export_include_dirs: ["decoder/include"],
 
     cppflags: [
-        "-Wno-ignored-qualifiers",
-        "-Wno-unused-parameter",
-        "-Wno-switch",
-        "-Wno-unused-private-field",
-        "-Wno-implicit-fallthrough",
         "-Wno-constant-logical-operand",
+        "-Wno-ignored-qualifiers",
+        "-Wno-implicit-fallthrough",
+        "-Wno-reorder-ctor",
+        "-Wno-switch",
+        "-Wno-unused-parameter",
+        "-Wno-unused-private-field",
         "-fexceptions",
     ],
     rtti: true,
