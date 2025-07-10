@@ -56,11 +56,9 @@ cc_library_static {
 
     cppflags: [
         "-Wno-ignored-qualifiers",
-        "-Wno-unused-parameter",
-        "-Wno-switch",
-        "-Wno-unused-private-field",
         "-Wno-implicit-fallthrough",
-        "-Wno-constant-logical-operand",
+        "-Wno-reorder-ctor",
+        "-Wno-switch",
         "-fexceptions",
     ],
     rtti: true,
