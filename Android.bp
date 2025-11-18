@@ -57,7 +57,6 @@ cc_library_static {
     cppflags: [
         "-Wno-ignored-qualifiers",
         "-Wno-implicit-fallthrough",
-        "-Wno-reorder-ctor",
         "-Wno-switch",
         "-fexceptions",
     ],
