@@ -15,6 +15,7 @@ third_party {
   identifier {
     type: "Git"
     value: "https://github.com/Linaro/OpenCSD.git"
-    version: "v1.7.1"
+    version: "83e4575459305c054ce43f7d5eb5e468e304645c"
+    closest_version: "v1.7.1"
   }
 }
