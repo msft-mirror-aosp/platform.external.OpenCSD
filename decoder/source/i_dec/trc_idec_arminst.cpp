@@ -163,6 +163,16 @@ int inst_Thumb_is_direct_branch_link(uint32_t inst, uint8_t *is_link, uint8_t *i
     } else if ((inst & 0xf5000000) == 0xb1000000) {
         /* CB(NZ) */
         *is_cond = 1;
+    } else if ((inst & 0xfffff001) == 0xf00fc001) {
+        /* LE (encoding T1) */
+    } else if ((inst & 0xfffff001) == 0xf02fc001) {
+        /* LE (encoding T2) */
+    } else if ((inst & 0xfffff001) == 0xf01fc001) {
+        /* LETP (encoding T3) */
+    } else if ((inst & 0xfff0f001) == 0xf040c001) {
+        /* WLS (encoding T1) */
+    } else if ((inst & 0xffc0f001) == 0xf000c001) {
+        /* WLSTP (encoding T3) */
     } else {
         is_direct_branch = 0;
     }
@@ -420,11 +430,14 @@ int inst_A64_is_indirect_branch_link(uint32_t inst, uint8_t *is_link, struct dec
 
         } else if ((inst & 0xffc0001f) == 0x5500001f) {
             /* RETA<k>SPPC label*/
-             info->instr_sub_type = OCSD_S_INSTR_V8_RET;
-        } else if (((inst & 0xfffffbe0) == 0xd65f0be0) && 
+            info->instr_sub_type = OCSD_S_INSTR_V8_RET;
+        } else if (((inst & 0xfffffbe0) == 0xd65f0be0) &&
                    ((inst & 0x1f) != 0x1f)) {
             /* RETA<k>SPPC <register>*/
-             info->instr_sub_type = OCSD_S_INSTR_V8_RET;
+            info->instr_sub_type = OCSD_S_INSTR_V8_RET;
+        } else if ((inst == 0xd6ff03e0) || (inst == 0xd6ff07e0)) {
+            /* TEXIT - acts as ERET */
+            info->instr_sub_type = OCSD_S_INSTR_V8_ERET;
         } else {
             is_indirect_branch = 0;
         }
@@ -502,6 +515,26 @@ int inst_Thumb_branch_destination(uint32_t addr, uint32_t inst, uint32_t *pnpc)
         /* Note that it's zero-extended - always a forward branch */
         npc = addr + 4 + ((((inst & 0x02000000) << 6) |
                            ((inst & 0x00f80000) << 7)) >> 25);
+        npc |= 1;
+    } else if ((inst & 0xfffff001) == 0xf00fc001) {
+        /* LE (encoding T1) */
+        npc = addr + 4 - (((inst & 0x000007fe) << 1) | ((inst & 0x00000800) >> 10));
+        npc |= 1;
+    } else if ((inst & 0xfffff001) == 0xf02fc001) {
+        /* LE (encoding T2) */
+        npc = addr + 4 - (((inst & 0x000007fe) << 1) | ((inst & 0x00000800) >> 10));
+        npc |= 1;
+    } else if ((inst & 0xfffff001) == 0xf01fc001) {
+        /* LETP (encoding T3) */
+        npc = addr + 4 - (((inst & 0x000007fe) << 1) | ((inst & 0x00000800) >> 10));
+        npc |= 1;
+    } else if ((inst & 0xfff0f001) == 0xf040c001) {
+        /* WLS (encoding T1) */
+        npc = addr + 4 + (((inst & 0x000007fe) << 1) | ((inst & 0x00000800) >> 10));
+        npc |= 1;
+    } else if ((inst & 0xffc0f001) == 0xf000c001) {
+        /* WLSTP (encoding T3) */
+        npc = addr + 4 + (((inst & 0x000007fe) << 1) | ((inst & 0x00000800) >> 10));
         npc |= 1;
     } else {
         is_direct_branch = 0;

@@ -37,6 +37,7 @@
 
 //#include <iostream>
 #include <sstream>
+#include <new>
 
 ocsdDefaultErrorLogger::ocsdDefaultErrorLogger() :
     m_Verbosity(OCSD_ERR_SEV_ERROR),
@@ -92,7 +93,7 @@ void ocsdDefaultErrorLogger::setOutputLogger(ocsdMsgLogger *pLogger)
 
 const ocsd_hndl_err_log_t ocsdDefaultErrorLogger::RegisterErrorSource(const std::string &component_name)
 {
-    ocsd_hndl_err_log_t handle = m_error_sources.size();
+    ocsd_hndl_err_log_t handle = (ocsd_hndl_err_log_t)m_error_sources.size();
     m_error_sources.push_back(component_name);
     return handle;
 }
