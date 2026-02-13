@@ -7,15 +7,15 @@ description: "This library provides an API suitable for the decode of ARM(r) Cor
 third_party {
   license_type: RESTRICTED
   last_upgrade_date {
-    year: 2025
-    month: 11
-    day: 17
+    year: 2026
+    month: 2
+    day: 12
   }
   homepage: "https://github.com/Linaro/OpenCSD"
   identifier {
     type: "Git"
     value: "https://github.com/Linaro/OpenCSD.git"
-    version: "83e4575459305c054ce43f7d5eb5e468e304645c"
-    closest_version: "v1.7.1"
+    version: "97f02f9612569d895662114a131a7fdba16e6995"
+    closest_version: "v1.8.0"
   }
 }

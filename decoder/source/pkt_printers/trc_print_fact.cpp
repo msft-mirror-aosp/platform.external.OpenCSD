@@ -33,6 +33,7 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <new>
 #include "pkt_printers/trc_print_fact.h"
 
 RawFramePrinter * PktPrinterFact::createRawFramePrinter(std::vector<ItemPrinter *> &printer_list, ocsdMsgLogger *pMsgLogger /*= 0*/)
@@ -81,7 +82,7 @@ ItemPrinter *PktPrinterFact::createProtocolPrinter(std::vector<ItemPrinter *> &p
 
 const int PktPrinterFact::numPrinters(std::vector<ItemPrinter *> &printer_list)
 {
-    return printer_list.size();
+    return (int)printer_list.size();
 }
 
 void PktPrinterFact::SavePrinter(std::vector<ItemPrinter *> &printer_list, ItemPrinter *pPrinter, ocsdMsgLogger *pMsgLogger)
